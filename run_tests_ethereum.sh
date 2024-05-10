@@ -172,6 +172,7 @@ block_range_query() {
                 continue
             fi
         done
+	echo ""
     done
 }
 
