@@ -39,6 +39,12 @@ type Transaction struct {
 	S                string            `json:"s"`
 }
 
+// Struct with only From and Nonce fields
+type PartialTransaction struct {
+	From  string `json:"from"`
+	Nonce int    `json:"nonce"`
+}
+
 type QueryResult struct {
 	Key       string       `json:"Key"`
 	Record    *Transaction `json:"record"`
@@ -65,6 +71,8 @@ func (sc *SmartContract) Invoke(stub shim.ChaincodeStubInterface) sc.Response {
 		return sc.CreateBulk(stub, args)
 	case "CreateBulkParallel":
 		return sc.CreateBulkParallel(stub, args)
+	case "CreateBulkParallelTo":
+		return sc.CreateBulkParallelTo(stub, args)
 	case "Create":
 		return sc.Create(stub, args)
 	case "GetState":
@@ -151,6 +159,36 @@ func (sc *SmartContract) CreateBulkParallel(stub shim.ChaincodeStubInterface, ar
 		}
 
 		err = stub.PutState(transaction.From, transactionBytes)
+		if err != nil {
+			return shim.Error("Failed to create transaction: " + err.Error())
+		}
+	}
+	return shim.Success(nil)
+}
+
+func (sc *SmartContract) CreateBulkParallelTo(stub shim.ChaincodeStubInterface, args []string) sc.Response {
+	var transactions []Transaction
+	json.Unmarshal([]byte(args[0]), &transactions)
+
+	for _, transaction := range transactions {
+		transactionBytes, err := json.Marshal(transaction)
+		if err != nil {
+			return shim.Error("Error marshaling transaction object: " + err.Error())
+		}
+		err = stub.PutState(transaction.From, transactionBytes)
+		if err != nil {
+			return shim.Error("Failed to create transaction: " + err.Error())
+		}
+
+		partial := PartialTransaction{
+			From:  transaction.From,
+			Nonce: transaction.Nonce,
+		}
+		partialBytes, err := json.Marshal(partial)
+		if err != nil {
+			return shim.Error("Error marshaling transaction object: " + err.Error())
+		}
+		err = stub.PutState("t-"+transaction.To, partialBytes)
 		if err != nil {
 			return shim.Error("Failed to create transaction: " + err.Error())
 		}
