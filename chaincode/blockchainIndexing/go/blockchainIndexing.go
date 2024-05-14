@@ -51,6 +51,12 @@ type QueryResult struct {
 	Timestamp string       `json:"timestamp"`
 }
 
+type ToQueryResult struct {
+	Key       string              `json:"Key"`
+	Record    *PartialTransaction `json:"record"`
+	Timestamp string              `json:"timestamp"`
+}
+
 // SimpleContract contract for handling writing and reading from the world state
 type SmartContract struct {
 }
@@ -79,6 +85,8 @@ func (sc *SmartContract) Invoke(stub shim.ChaincodeStubInterface) sc.Response {
 		return sc.GetState(stub, args)
 	case "GetHistoryForKey":
 		return sc.GetHistoryForKey(stub, args)
+	case "GetHistoryForKeyTo":
+		return sc.GetHistoryForKeyTo(stub, args)
 	// Requires GetHistoryForKeyRange API
 	case "GetHistoryForKeyRange":
 		return sc.GetHistoryForKeyRange(stub, args)
@@ -232,6 +240,38 @@ func (sc *SmartContract) GetHistoryForKey(stub shim.ChaincodeStubInterface, args
 		timestamp := time.Unix(historyData.Timestamp.Seconds, int64(historyData.Timestamp.Nanos)).String()
 
 		history = append(history, QueryResult{Key: historyData.TxId, Record: &transaction, Timestamp: timestamp})
+	}
+
+	historyAsBytes, _ := json.Marshal(history)
+	return shim.Success(historyAsBytes)
+}
+
+// GetHistoryForKey calls built in GetHistoryForKey() API
+func (sc *SmartContract) GetHistoryForKeyTo(stub shim.ChaincodeStubInterface, args []string) sc.Response {
+	if len(args) != 1 {
+		return shim.Error("Incorrect number of arguments. Expecting 1")
+	}
+
+	historyItr, err := stub.GetHistoryForKey("t-" + args[0])
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+	defer historyItr.Close()
+
+	var history []ToQueryResult
+	for historyItr.HasNext() {
+		historyData, err := historyItr.Next()
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+
+		var partial PartialTransaction
+		json.Unmarshal(historyData.Value, &partial)
+
+		//Convert google.protobuf.Timestamp to string
+		timestamp := time.Unix(historyData.Timestamp.Seconds, int64(historyData.Timestamp.Nanos)).String()
+
+		history = append(history, ToQueryResult{Key: historyData.TxId, Record: &partial, Timestamp: timestamp})
 	}
 
 	historyAsBytes, _ := json.Marshal(history)
