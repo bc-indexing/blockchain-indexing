@@ -193,6 +193,7 @@ func (sc *SmartContract) CreateBulkParallelTo(stub shim.ChaincodeStubInterface, 
 		}
 
 		partial := PartialTransaction{
+			To:    "t-" + transaction.To,
 			From:  transaction.From,
 			Value: transaction.Value,
 		}
