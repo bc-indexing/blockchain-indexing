@@ -157,8 +157,6 @@ func main() {
 		GetState(contract, *key)
 	case "GetHistoryForKey":
 		GetHistoryForKey(contract, *key)
-	case "GetHistoryForKeyTo":
-		GetHistoryForKeyTo(contract, *key)
 	case "GetHistoryForKeyRangeOld":
 		GetHistoryForKeyRangeOld(contract, *key)
 	case "GetHistoryForOrderedKeyRangeOld":
@@ -564,32 +562,6 @@ func GetHistoryForKey(contract *gateway.Contract, key string) {
 	startTime := time.Now()
 
 	result, err := contract.EvaluateTransaction("GetHistoryForKey", key)
-	if err != nil {
-		log.Fatalf("Failed to evaluate transaction: %s\n", err)
-	}
-
-	endTime := time.Now()
-	executionTime := endTime.Sub(startTime).Seconds()
-
-	var assets []Asset
-	err = json.Unmarshal(result, &assets)
-	if err != nil {
-		log.Fatalf("Failed to unmarshal JSON: %s\n", err)
-	}
-	fmt.Printf("Number of records found: %d\n", len(assets))
-
-	fmt.Printf("First asset: %+v\n", assets[0])
-	log.Printf("Total execution time is: %f sec\n", executionTime)
-	//index_total, index_average, disk_total, disk_average := get_read_times()
-	//log.Printf("Total time to read index is %d microseconds with average time of %f microseconds\n", index_total, index_average)
-	//log.Printf("Total time to read disk is %d microseconds with average time of %f microseconds\n", disk_total, disk_average)
-}
-
-// GetHistoryForKey calls GetHistoryForKey API
-func GetHistoryForKeyTo(contract *gateway.Contract, key string) {
-	startTime := time.Now()
-
-	result, err := contract.EvaluateTransaction("GetHistoryForKeyTo", key)
 	if err != nil {
 		log.Fatalf("Failed to evaluate transaction: %s\n", err)
 	}

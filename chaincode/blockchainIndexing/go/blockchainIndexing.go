@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hyperledger/fabric-chaincode-go/shim"
+	"github.com/hyperledger/fabric-protos-go/ledger/queryresult"
 	sc "github.com/hyperledger/fabric-protos-go/peer"
 )
 
@@ -42,10 +44,14 @@ type Transaction struct {
 // Struct with only From and Nonce fields
 type PartialTransaction struct {
 	From  string `json:"from"`
-	Nonce int    `json:"nonce"`
+	To    string `json:"to"`
+	Value string `json:"value"`
 }
 
-type QueryResult struct {
+type QueryResult interface {
+}
+
+type FromQueryResult struct {
 	Key       string       `json:"Key"`
 	Record    *Transaction `json:"record"`
 	Timestamp string       `json:"timestamp"`
@@ -85,8 +91,6 @@ func (sc *SmartContract) Invoke(stub shim.ChaincodeStubInterface) sc.Response {
 		return sc.GetState(stub, args)
 	case "GetHistoryForKey":
 		return sc.GetHistoryForKey(stub, args)
-	case "GetHistoryForKeyTo":
-		return sc.GetHistoryForKeyTo(stub, args)
 	// Requires GetHistoryForKeyRange API
 	case "GetHistoryForKeyRange":
 		return sc.GetHistoryForKeyRange(stub, args)
@@ -190,7 +194,7 @@ func (sc *SmartContract) CreateBulkParallelTo(stub shim.ChaincodeStubInterface, 
 
 		partial := PartialTransaction{
 			From:  transaction.From,
-			Nonce: transaction.Nonce,
+			Value: transaction.Value,
 		}
 		partialBytes, err := json.Marshal(partial)
 		if err != nil {
@@ -214,6 +218,25 @@ func (sc *SmartContract) GetState(stub shim.ChaincodeStubInterface, args []strin
 	return shim.Success(val)
 }
 
+func ToOrFrom(historyData *queryresult.KeyModification) QueryResult {
+	var transaction Transaction
+	json.Unmarshal(historyData.Value, &transaction)
+
+	//Convert google.protobuf.Timestamp to string
+	timestamp := time.Unix(historyData.Timestamp.Seconds, int64(historyData.Timestamp.Nanos)).String()
+
+	if strings.HasPrefix(transaction.To, "t-") {
+		var partial PartialTransaction
+		err := json.Unmarshal(historyData.Value, &partial)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+		return ToQueryResult{Key: historyData.TxId, Record: &partial, Timestamp: timestamp}
+	} else {
+		return FromQueryResult{Key: historyData.TxId, Record: &transaction, Timestamp: timestamp}
+	}
+}
+
 // GetHistoryForKey calls built in GetHistoryForKey() API
 func (sc *SmartContract) GetHistoryForKey(stub shim.ChaincodeStubInterface, args []string) sc.Response {
 	if len(args) != 1 {
@@ -232,46 +255,8 @@ func (sc *SmartContract) GetHistoryForKey(stub shim.ChaincodeStubInterface, args
 		if err != nil {
 			return shim.Error(err.Error())
 		}
-
-		var transaction Transaction
-		json.Unmarshal(historyData.Value, &transaction)
-
-		//Convert google.protobuf.Timestamp to string
-		timestamp := time.Unix(historyData.Timestamp.Seconds, int64(historyData.Timestamp.Nanos)).String()
-
-		history = append(history, QueryResult{Key: historyData.TxId, Record: &transaction, Timestamp: timestamp})
-	}
-
-	historyAsBytes, _ := json.Marshal(history)
-	return shim.Success(historyAsBytes)
-}
-
-// GetHistoryForKey calls built in GetHistoryForKey() API
-func (sc *SmartContract) GetHistoryForKeyTo(stub shim.ChaincodeStubInterface, args []string) sc.Response {
-	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting 1")
-	}
-
-	historyItr, err := stub.GetHistoryForKey("t-" + args[0])
-	if err != nil {
-		return shim.Error(err.Error())
-	}
-	defer historyItr.Close()
-
-	var history []ToQueryResult
-	for historyItr.HasNext() {
-		historyData, err := historyItr.Next()
-		if err != nil {
-			return shim.Error(err.Error())
-		}
-
-		var partial PartialTransaction
-		json.Unmarshal(historyData.Value, &partial)
-
-		//Convert google.protobuf.Timestamp to string
-		timestamp := time.Unix(historyData.Timestamp.Seconds, int64(historyData.Timestamp.Nanos)).String()
-
-		history = append(history, ToQueryResult{Key: historyData.TxId, Record: &partial, Timestamp: timestamp})
+		result := ToOrFrom(historyData)
+		history = append(history, result)
 	}
 
 	historyAsBytes, _ := json.Marshal(history)
@@ -296,19 +281,13 @@ func (sc *SmartContract) GetHistoryForKeyRange(stub shim.ChaincodeStubInterface,
 		if err != nil {
 			return shim.Error(err.Error())
 		}
-
-		var transaction Transaction
-		json.Unmarshal(historyData.Value, &transaction)
-
-		//Convert google.protobuf.Timestamp to string
-		timestamp := time.Unix(historyData.Timestamp.Seconds, int64(historyData.Timestamp.Nanos)).String()
-
-		history = append(history, QueryResult{Key: historyData.TxId, Record: &transaction, Timestamp: timestamp})
+		result := ToOrFrom(historyData)
+		history = append(history, result)
 	}
 
-	// var histories [][]QueryResult
+	// var histories [][]FromQueryResult
 	// for _, historyItr := range historyItrs {
-	// 	var history []QueryResult
+	// 	var history []FromQueryResult
 	// 	for historyItr.HasNext() {
 	// 		historyData, err := historyItr.Next()
 	// 		if err != nil {
@@ -318,7 +297,7 @@ func (sc *SmartContract) GetHistoryForKeyRange(stub shim.ChaincodeStubInterface,
 	// 		var transaction Transaction
 	// 		json.Unmarshal(historyData.Value, &transaction)
 
-	// 		history = append(history, QueryResult{Key: historyData.TxId, Record: &transaction})
+	// 		history = append(history, FromQueryResult{Key: historyData.TxId, Record: &transaction})
 	// 	}
 	// 	histories = append(histories, history)
 	// }
@@ -349,13 +328,8 @@ func (sc *SmartContract) GetHistoryForVersionRange(stub shim.ChaincodeStubInterf
 		if err != nil {
 			return shim.Error(err.Error())
 		}
-
-		var transaction Transaction
-		json.Unmarshal(versionData.Value, &transaction) // .Value?
-
-		timestamp := time.Unix(versionData.Timestamp.Seconds, int64(versionData.Timestamp.Nanos)).String()
-
-		versions = append(versions, QueryResult{Key: versionData.TxId, Record: &transaction, Timestamp: timestamp})
+		result := ToOrFrom(versionData)
+		versions = append(versions, result)
 	}
 
 	versionAsBytes, _ := json.Marshal(versions)
@@ -382,13 +356,8 @@ func (sc *SmartContract) GetHistoryForBlockRange(stub shim.ChaincodeStubInterfac
 		if err != nil {
 			return shim.Error(err.Error())
 		}
-
-		var transaction Transaction
-		json.Unmarshal(resultData.Value, &transaction) // .Value?
-
-		timestamp := time.Unix(resultData.Timestamp.Seconds, int64(resultData.Timestamp.Nanos)).String()
-
-		results = append(results, QueryResult{Key: resultData.TxId, Record: &transaction, Timestamp: timestamp})
+		result := ToOrFrom(resultData)
+		results = append(results, result)
 	}
 
 	resultsAsBytes, _ := json.Marshal(results)
