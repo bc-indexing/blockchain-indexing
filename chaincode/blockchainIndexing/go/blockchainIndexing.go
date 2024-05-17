@@ -219,11 +219,11 @@ func (sc *SmartContract) GetState(stub shim.ChaincodeStubInterface, args []strin
 }
 
 func ToOrFrom(historyData *queryresult.KeyModification) QueryResult {
-	var transaction Transaction
-	json.Unmarshal(historyData.Value, &transaction)
-
 	//Convert google.protobuf.Timestamp to string
 	timestamp := time.Unix(historyData.Timestamp.Seconds, int64(historyData.Timestamp.Nanos)).String()
+
+	var transaction Transaction
+	json.Unmarshal(historyData.Value, &transaction)
 
 	if strings.HasPrefix(transaction.To, "t-") {
 		var partial PartialTransaction
