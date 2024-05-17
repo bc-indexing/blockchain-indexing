@@ -232,9 +232,8 @@ func ToOrFrom(historyData *queryresult.KeyModification) QueryResult {
 			return shim.Error(err.Error())
 		}
 		return ToQueryResult{Key: historyData.TxId, Record: &partial, Timestamp: timestamp}
-	} else {
-		return FromQueryResult{Key: historyData.TxId, Record: &transaction, Timestamp: timestamp}
 	}
+	return FromQueryResult{Key: historyData.TxId, Record: &transaction, Timestamp: timestamp}
 }
 
 // GetHistoryForKey calls built in GetHistoryForKey() API
