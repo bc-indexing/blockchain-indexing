@@ -218,7 +218,7 @@ func (sc *SmartContract) GetState(stub shim.ChaincodeStubInterface, args []strin
 	return shim.Success(val)
 }
 
-func ToOrFrom(historyData *queryresult.KeyModification) QueryResult {
+func ToOrFrom(historyData *queryresult.KeyModification) (QueryResult, error) {
 	//Convert google.protobuf.Timestamp to string
 	timestamp := time.Unix(historyData.Timestamp.Seconds, int64(historyData.Timestamp.Nanos)).String()
 
@@ -229,11 +229,11 @@ func ToOrFrom(historyData *queryresult.KeyModification) QueryResult {
 		var partial PartialTransaction
 		err := json.Unmarshal(historyData.Value, &partial)
 		if err != nil {
-			return shim.Error(err.Error())
+			return nil, err
 		}
-		return ToQueryResult{Key: historyData.TxId, Record: &partial, Timestamp: timestamp}
+		return ToQueryResult{Key: historyData.TxId, Record: &partial, Timestamp: timestamp}, nil
 	}
-	return FromQueryResult{Key: historyData.TxId, Record: &transaction, Timestamp: timestamp}
+	return FromQueryResult{Key: historyData.TxId, Record: &transaction, Timestamp: timestamp}, nil
 }
 
 // GetHistoryForKey calls built in GetHistoryForKey() API
@@ -254,7 +254,10 @@ func (sc *SmartContract) GetHistoryForKey(stub shim.ChaincodeStubInterface, args
 		if err != nil {
 			return shim.Error(err.Error())
 		}
-		result := ToOrFrom(historyData)
+		result, err := ToOrFrom(historyData)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
 		history = append(history, result)
 	}
 
@@ -280,7 +283,10 @@ func (sc *SmartContract) GetHistoryForKeyRange(stub shim.ChaincodeStubInterface,
 		if err != nil {
 			return shim.Error(err.Error())
 		}
-		result := ToOrFrom(historyData)
+		result, err := ToOrFrom(historyData)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
 		history = append(history, result)
 	}
 
@@ -327,7 +333,10 @@ func (sc *SmartContract) GetHistoryForVersionRange(stub shim.ChaincodeStubInterf
 		if err != nil {
 			return shim.Error(err.Error())
 		}
-		result := ToOrFrom(versionData)
+		result, err := ToOrFrom(versionData)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
 		versions = append(versions, result)
 	}
 
@@ -355,7 +364,10 @@ func (sc *SmartContract) GetHistoryForBlockRange(stub shim.ChaincodeStubInterfac
 		if err != nil {
 			return shim.Error(err.Error())
 		}
-		result := ToOrFrom(resultData)
+		result, err := ToOrFrom(resultData)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
 		results = append(results, result)
 	}
 
