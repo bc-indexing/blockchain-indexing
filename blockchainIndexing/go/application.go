@@ -149,8 +149,6 @@ func main() {
 		BulkInvoke(contract, *file)
 	case "BulkInvokeParallel":
 		BulkInvokeParallel(contract, *file)
-	case "BulkInvokeParallelTo":
-		BulkInvokeParallelTo(contract, *file)
 	case "Invoke":
 		Invoke(contract, *file)
 	case "GetState":
@@ -342,105 +340,6 @@ func BulkInvokeParallel(contract *gateway.Contract, fileUrl string) {
 		go func(data string) {
 			defer wg.Done()
 			_, err = contract.SubmitTransaction("CreateBulkParallel", data)
-			if err != nil {
-				log.Println(err)
-			}
-			// Once the transaction is complete, release the slot
-			<-sem
-		}(string(blockBytes))
-		// endTime := time.Now()
-		// executionTime := endTime.Sub(blockTime).Seconds()
-		// log.Printf("Execution Time: %f sec at block %d with length: %d\n", executionTime, blockCounter, len(transactions))
-		blockCounter++
-		totalTransactions += len(transactions)
-		transactions = []Transaction{}
-
-	}
-
-	// Read the closing ']' of the outermost array
-	if _, err := decoder.Token(); err != nil {
-		log.Fatal(err)
-	}
-
-	// Wait for all goroutines to finish
-	wg.Wait()
-
-	// Drain the semaphore channel
-	for i := 0; i < cap(sem); i++ {
-		sem <- true
-	}
-
-	executionTime := time.Since(startTime).Seconds()
-	log.Printf("Time to insert %d transactions: %f seconds\n", totalTransactions, executionTime)
-}
-
-func BulkInvokeParallelTo(contract *gateway.Contract, fileUrl string) {
-	if fileUrl == "" || !filepath.IsAbs(fileUrl) {
-		log.Fatalln("File URL is not absolute.")
-	}
-	var totalTransactions int
-
-	var wg sync.WaitGroup
-
-	// Create a buffered channel to limit number of goroutines
-	sem := make(chan bool, 10)
-
-	startTime := time.Now()
-	// log.Printf("Starting bulk transaction at time: %s\n", startTime.Format(time.UnixDate))
-
-	file, err := os.Open(fileUrl)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-	decoder := json.NewDecoder(bufio.NewReader(file))
-
-	var transactions []Transaction
-	blockCounter := 1
-
-	// Read the opening '['
-	if _, err := decoder.Token(); err != nil {
-		log.Fatal(err)
-	}
-
-	// Iterate over blocks
-	for decoder.More() {
-		// Read the opening '[' of the block
-		if _, err := decoder.Token(); err != nil {
-			log.Fatal(err)
-		}
-
-		// Process the block header
-		var blockHeader Header
-		if err := decoder.Decode(&blockHeader); err != nil {
-			log.Fatal(err)
-		}
-
-		// Process transactions
-		for decoder.More() {
-			var transaction Transaction
-			if err := decoder.Decode(&transaction); err != nil {
-				log.Fatal(err)
-			}
-			transactions = append(transactions, transaction)
-		}
-
-		// Read the closing ']' of the block
-		if _, err := decoder.Token(); err != nil {
-			log.Fatal(err)
-		}
-
-		// blockTime := time.Now()
-		blockBytes, err := json.Marshal(transactions)
-		if err != nil {
-			log.Fatalf("Failed to marshal JSON: %s", err)
-		}
-		wg.Add(1)
-		// Before spawning a goroutine, acquire a slot in the channel
-		sem <- true
-		go func(data string) {
-			defer wg.Done()
-			_, err = contract.SubmitTransaction("CreateBulkParallelTo", data)
 			if err != nil {
 				log.Println(err)
 			}
